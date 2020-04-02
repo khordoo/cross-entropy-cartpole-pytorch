@@ -10,7 +10,7 @@ Changes:
 # Deployment
 - Install the dependencies and run the Jupyter notebook 
 
-Note: To view the result of training including in tensorboard do the following steps:
+Note: To view the result of training steps in tensorboard perfrom the following steps:
 - Install tensorboard and tensorboardX
 - Run the code and wait until the end of the training 
 - Execute the following code in the notebook
