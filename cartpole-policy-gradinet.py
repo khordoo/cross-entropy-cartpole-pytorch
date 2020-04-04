@@ -90,23 +90,44 @@ class Batch:
         return np.array(self.total_rewards).mean()
 
 
+class Evaluator:
+    def __init__(self, model, entropy_factor=0.95):
+        self.model = model
+        self.entropy_factor = entropy_factor
+
+    def get_losses(self, batch):
+        actions_logit = self.model(torch.FloatTensor(batch.states))
+        log_prob_actions = torch.log_softmax(actions_logit, dim=1)
+        policy_loss = self._policy_loss(log_prob_actions, batch)
+        entropy_loss, entropy = self._entropy_loss(actions_logit, log_prob_actions)
+        return policy_loss, entropy_loss, entropy
+
+    def _policy_loss(self, log_prob_actions, batch):
+        log_prob_executed_actions = torch.gather(log_prob_actions, dim=1,
+                                                 index=torch.LongTensor(batch.actions).unsqueeze(-1)).squeeze()
+        return -(torch.FloatTensor(batch.scaled_discounted_rewards) * log_prob_executed_actions).mean()
+
+    def _entropy_loss(self, actions_logit, log_prob_actions):
+        actions_prob = torch.softmax(actions_logit, dim=1)
+        entropy = - (actions_prob * log_prob_actions).sum(dim=1).mean()
+        entropy_loss = -self.entropy_factor * entropy
+        return entropy_loss, entropy
+
+
 class Session:
     def __init__(self, model, env, batch_size, learning_rate=0.01, discount_factor=0.99, entropy_factor=0.01):
         self.env = env
         self.model = model
         self.batch_size = batch_size
         self.discount_factor = discount_factor
-        self.entropy_factor = entropy_factor
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate, amsgrad=True)
         self.writer = tensorboardX.SummaryWriter()
+        self.evaluator = Evaluator(self.model, entropy_factor)
 
     def train(self, target_reward):
         for training_step, batch in enumerate(self.batch_generator()):
             self.optimizer.zero_grad()
-            actions_logit = self.model(torch.FloatTensor(batch.states))
-            log_prob_actions = torch.log_softmax(actions_logit, dim=1)
-            policy_loss = self.policy_loss(log_prob_actions, batch)
-            entropy_loss, entropy = self.entropy_loss(actions_logit, log_prob_actions)
+            policy_loss, entropy_loss, entropy = self.evaluator.get_losses(batch)
             total_loss = policy_loss + entropy_loss
             total_loss.backward()
             self.optimizer.step()
@@ -141,17 +162,6 @@ class Session:
         batch = Batch(self.batch_size)
         episode = Episode(self.discount_factor, reward_scaling_enabled=True)
         return batch, episode, state
-
-    def policy_loss(self, log_prob_actions, batch):
-        log_prob_executed_actions = torch.gather(log_prob_actions, dim=1,
-                                                 index=torch.LongTensor(batch.actions).unsqueeze(-1)).squeeze()
-        return -(torch.FloatTensor(batch.scaled_discounted_rewards) * log_prob_executed_actions).mean()
-
-    def entropy_loss(self, actions_logit, log_prob_actions):
-        actions_prob = torch.softmax(actions_logit, dim=1)
-        entropy = - (actions_prob * log_prob_actions).sum(dim=1).mean()
-        entropy_loss = -self.entropy_factor * entropy
-        return entropy_loss, entropy
 
     def report_progress(self, training_step, total_loss, policy_loss, entropy_loss, entropy, batch):
         self.writer.add_scalar('Mean Reward', batch.mean_rewards(), training_step)
