@@ -99,7 +99,7 @@ class Session:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate, amsgrad=True)
 
     def train(self, target_reward):
-        itr = 0
+        training_step = 0
         for batch in self.batch_generator():
             self.optimizer.zero_grad()
             actions_logit = self.model(torch.FloatTensor(batch.states))
@@ -114,9 +114,8 @@ class Session:
                 self.save()
                 print('\nSolved!')
                 break
-            itr += 1
-            print(f'\r{itr} iterations, loss: {total_loss.item():.6f}, mean rewards: {batch.mean_rewards():.2f}',
-                  end='')
+            training_step += 1
+            self.report(training_step, total_loss, policy_loss, entropy_loss, batch)
 
     def batch_generator(self):
         state = self.env.reset()
@@ -152,6 +151,10 @@ class Session:
         entropy = - (actions_prob * log_prob_actions).sum(dim=1).mean()
         entropy_loss = -self.entropy_factor * entropy
         return entropy_loss
+
+    def report(self, training_step, total_loss, policy_loss, entropy_loss, batch):
+        print(f'\r{training_step} steps, total loss: {total_loss.item():.6f}, '
+              f'rewards: {batch.mean_rewards():.0f}', end='')
 
     def save(self, reward=0):
         torch.save(self.model.state_dict(), self.env.spec.id + f'_{reward}.dat')
