@@ -1,3 +1,4 @@
+import datetime
 import gym
 import torch
 import torch.nn as nn
@@ -182,7 +183,9 @@ class Session:
               f'rewards: {batch.mean_rewards():.0f}', end='')
 
     def save(self):
-        torch.save(self.model.state_dict(), self.env.spec.id + '.dat')
+        file_name = self.env.spec.id + '_' + \
+                    datetime.datetime.now().isoformat(timespec='seconds') + '.dat'
+        torch.save(self.model.state_dict(), file_name)
 
     def play(self, model_state_file_path=None):
         env = gym.wrappers.Monitor(self.env, 'videos', video_callable=lambda episode_id: True, force=True)
@@ -215,5 +218,6 @@ session = Session(env=env,
                   discount_factor=DISCOUNT_FACTOR,
                   entropy_factor=ENTROPY_FACTOR_BETA
                   )
+
 session.train(target_reward=199)
 session.play()
