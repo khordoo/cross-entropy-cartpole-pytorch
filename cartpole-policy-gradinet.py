@@ -63,7 +63,7 @@ class Episode:
         return len(self.states)
 
 
-class EpisodeBatch:
+class Batch:
     def __init__(self, size):
         self.size = size
         self.count = 0
@@ -138,7 +138,7 @@ class Session:
             state = new_state
 
     def reset_generator_state(self):
-        batch = EpisodeBatch(self.batch_size)
+        batch = Batch(self.batch_size)
         episode = Episode(self.discount_factor, scale_rewards=True)
         return batch, episode
 
