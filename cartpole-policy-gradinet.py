@@ -99,8 +99,7 @@ class Session:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate, amsgrad=True)
 
     def train(self, target_reward):
-        training_step = 0
-        for batch in self.batch_generator():
+        for training_step, batch in enumerate(self.batch_generator()):
             self.optimizer.zero_grad()
             actions_logit = self.model(torch.FloatTensor(batch.states))
             log_prob_actions = torch.log_softmax(actions_logit, dim=1)
@@ -114,7 +113,6 @@ class Session:
                 self.save()
                 print('\nSolved!')
                 break
-            training_step += 1
             self.report(training_step, total_loss, policy_loss, entropy_loss, batch)
 
     def batch_generator(self):
