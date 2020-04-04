@@ -26,9 +26,9 @@ class Net(nn.Module):
 
 
 class Episode:
-    def __init__(self, discount_factor=0.99, scale_rewards=True):
+    def __init__(self, discount_factor=0.99, reward_scaling_enabled=True):
         self.discount_factor = discount_factor
-        self.scale_rewards = scale_rewards
+        self.reward_scaling_enabled = reward_scaling_enabled
         self.total_rewards = 0.0
         self.states = []
         self.actions = []
@@ -53,7 +53,7 @@ class Episode:
         self.discounted_rewards[-1] = self.rewards[-1]
         for i in range(steps - 2, -1, -1):
             self.discounted_rewards[i] = self.rewards[i] + self.discount_factor * self.discounted_rewards[i + 1]
-        if self.scale_rewards:
+        if self.reward_scaling_enabled:
             self.scaled_discounted_rewards = \
                 (self.discounted_rewards - self.discounted_rewards.mean()) / self.discounted_rewards.std()
         self.discounted_rewards = self.discounted_rewards.tolist()
@@ -129,14 +129,14 @@ class Session:
                     batch, episode, _ = self.reset_generator_state()
 
                 batch.append(episode)
-                episode = Episode(self.discount_factor, scale_rewards=True)
+                episode = Episode(self.discount_factor, reward_scaling_enabled=True)
                 new_state = self.env.reset()
             state = new_state
 
     def reset_generator_state(self):
         state = self.env.reset()
         batch = Batch(self.batch_size)
-        episode = Episode(self.discount_factor, scale_rewards=True)
+        episode = Episode(self.discount_factor, reward_scaling_enabled=True)
         return batch, episode, state
 
     def policy_loss(self, log_prob_actions, batch):
