@@ -116,8 +116,7 @@ class Session:
             self.report(training_step, total_loss, policy_loss, entropy_loss, batch)
 
     def batch_generator(self):
-        state = self.env.reset()
-        batch, episode = self.reset_generator_state()
+        batch, episode, state = self.reset_generator_state()
         while True:
             action_values = self.model(torch.FloatTensor([state]))
             action_prob = nn.Softmax(dim=1)(action_values)
@@ -127,7 +126,7 @@ class Session:
             if done:
                 if batch.is_full():
                     yield batch
-                    batch, episode = self.reset_generator_state()
+                    batch, episode, _ = self.reset_generator_state()
 
                 batch.append(episode)
                 episode = Episode(self.discount_factor, scale_rewards=True)
@@ -135,9 +134,10 @@ class Session:
             state = new_state
 
     def reset_generator_state(self):
+        state = self.env.reset()
         batch = Batch(self.batch_size)
         episode = Episode(self.discount_factor, scale_rewards=True)
-        return batch, episode
+        return batch, episode, state
 
     def policy_loss(self, log_prob_actions, batch):
         log_prob_executed_actions = torch.gather(log_prob_actions, dim=1,
