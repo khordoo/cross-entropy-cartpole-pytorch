@@ -91,7 +91,7 @@ class Batch:
 
 
 class Evaluator:
-    def __init__(self, model, entropy_factor=0.95):
+    def __init__(self, model, entropy_factor=0.01):
         self.model = model
         self.entropy_factor = entropy_factor
 
