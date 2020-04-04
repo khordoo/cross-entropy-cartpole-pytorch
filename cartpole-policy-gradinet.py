@@ -95,7 +95,7 @@ class Evaluator:
         self.model = model
         self.entropy_factor = entropy_factor
 
-    def get_losses(self, batch):
+    def evaluate(self, batch):
         actions_logit = self.model(torch.FloatTensor(batch.states))
         log_prob_actions = torch.log_softmax(actions_logit, dim=1)
         policy_loss = self._policy_loss(log_prob_actions, batch)
@@ -127,7 +127,7 @@ class Session:
     def train(self, target_reward):
         for training_step, batch in enumerate(self.batch_generator()):
             self.optimizer.zero_grad()
-            policy_loss, entropy_loss, entropy = self.evaluator.get_losses(batch)
+            policy_loss, entropy_loss, entropy = self.evaluator.evaluate(batch)
             total_loss = policy_loss + entropy_loss
             total_loss.backward()
             self.optimizer.step()
