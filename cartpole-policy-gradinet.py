@@ -159,7 +159,6 @@ class Session:
         self.writer.add_scalar("Policy loss", policy_loss.item(), training_step)
         self.writer.add_scalar("Entropy loss", entropy_loss.item(), training_step)
         self.writer.add_scalar('Entropy', entropy.item(), training_step)
-
         print(f'\r{training_step} steps, total loss: {total_loss.item():.6f}, '
               f'rewards: {batch.mean_rewards():.0f}', end='')
 
