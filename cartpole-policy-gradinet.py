@@ -2,6 +2,7 @@ import gym
 import torch
 import torch.nn as nn
 import numpy as np
+import tensorboardX
 
 HIDDEN_SIZE = 128
 DISCOUNT_FACTOR = 0.95
@@ -97,6 +98,7 @@ class Session:
         self.discount_factor = discount_factor
         self.entropy_factor = entropy_factor
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate, amsgrad=True)
+        self.writer = tensorboardX.SummaryWriter()
 
     def train(self, target_reward):
         for training_step, batch in enumerate(self.batch_generator()):
@@ -104,16 +106,17 @@ class Session:
             actions_logit = self.model(torch.FloatTensor(batch.states))
             log_prob_actions = torch.log_softmax(actions_logit, dim=1)
             policy_loss = self.policy_loss(log_prob_actions, batch)
-            entropy_loss = self.entropy_loss(actions_logit, log_prob_actions)
+            entropy_loss, entropy = self.entropy_loss(actions_logit, log_prob_actions)
             total_loss = policy_loss + entropy_loss
             total_loss.backward()
             self.optimizer.step()
 
             if batch.mean_rewards() > target_reward:
+                self.writer.close()
                 self.save()
                 print('\nSolved!')
                 break
-            self.report(training_step, total_loss, policy_loss, entropy_loss, batch)
+            self.report_progress(training_step, total_loss, policy_loss, entropy_loss, entropy, batch)
 
     def batch_generator(self):
         batch, episode, state = self.reset_generator_state()
@@ -148,9 +151,15 @@ class Session:
         actions_prob = torch.softmax(actions_logit, dim=1)
         entropy = - (actions_prob * log_prob_actions).sum(dim=1).mean()
         entropy_loss = -self.entropy_factor * entropy
-        return entropy_loss
+        return entropy_loss, entropy
 
-    def report(self, training_step, total_loss, policy_loss, entropy_loss, batch):
+    def report_progress(self, training_step, total_loss, policy_loss, entropy_loss, entropy, batch):
+        self.writer.add_scalar('Mean Reward', batch.mean_rewards(), training_step)
+        self.writer.add_scalar('Total loss', total_loss.item(), training_step)
+        self.writer.add_scalar("Policy loss", policy_loss.item(), training_step)
+        self.writer.add_scalar("Entropy loss", entropy_loss.item(), training_step)
+        self.writer.add_scalar('Entropy', entropy.item(), training_step)
+
         print(f'\r{training_step} steps, total loss: {total_loss.item():.6f}, '
               f'rewards: {batch.mean_rewards():.0f}', end='')
 
