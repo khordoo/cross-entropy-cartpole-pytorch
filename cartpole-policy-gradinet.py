@@ -162,8 +162,8 @@ class Session:
         print(f'\r{training_step} steps, total loss: {total_loss.item():.6f}, '
               f'rewards: {batch.mean_rewards():.0f}', end='')
 
-    def save(self, reward=0):
-        torch.save(self.model.state_dict(), self.env.spec.id + f'_{reward}.dat')
+    def save(self):
+        torch.save(self.model.state_dict(), self.env.spec.id + '.dat')
 
     def play(self, model_state_file_path=None):
         env = gym.wrappers.Monitor(self.env, 'videos', video_callable=lambda episode_id: True, force=True)
