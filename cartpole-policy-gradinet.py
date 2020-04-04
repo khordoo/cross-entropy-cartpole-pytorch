@@ -94,12 +94,13 @@ class Evaluator:
     def __init__(self, model, entropy_factor=0.01):
         self.model = model
         self.entropy_factor = entropy_factor
+        self.actions_logits = None
 
     def evaluate(self, batch):
-        actions_logit = self.model(torch.FloatTensor(batch.states))
-        log_prob_actions = torch.log_softmax(actions_logit, dim=1)
+        self.actions_logit = self.model(torch.FloatTensor(batch.states))
+        log_prob_actions = torch.log_softmax(self.actions_logit, dim=1)
         policy_loss = self._policy_loss(log_prob_actions, batch)
-        entropy_loss, entropy = self._entropy_loss(actions_logit, log_prob_actions)
+        entropy_loss, entropy = self._entropy_loss(self.actions_logit, log_prob_actions)
         return policy_loss, entropy_loss, entropy
 
     def _policy_loss(self, log_prob_actions, batch):
@@ -112,6 +113,12 @@ class Evaluator:
         entropy = - (actions_prob * log_prob_actions).sum(dim=1).mean()
         entropy_loss = -self.entropy_factor * entropy
         return entropy_loss, entropy
+
+    def kullback_leibler_divergence(self, batch):
+        previous_actions_prob = torch.softmax(self.actions_logit, dim=1)
+        new_actions_logit = self.model(torch.FloatTensor(batch.states))
+        new_actions_prob = torch.softmax(new_actions_logit, dim=1)
+        return (previous_actions_prob * (previous_actions_prob / new_actions_prob).log()).sum(dim=1).mean()
 
 
 class Session:
@@ -131,13 +138,14 @@ class Session:
             total_loss = policy_loss + entropy_loss
             total_loss.backward()
             self.optimizer.step()
+            kl_divergence = self.evaluator.kullback_leibler_divergence(batch)
 
             if batch.mean_rewards() > target_reward:
                 self.writer.close()
                 self.save()
                 print('\nSolved!')
                 break
-            self.report_progress(training_step, total_loss, policy_loss, entropy_loss, entropy, batch)
+            self.report_progress(training_step, total_loss, policy_loss, entropy_loss, entropy, kl_divergence, batch)
 
     def batch_generator(self):
         batch, episode, state = self.reset_generator_state()
@@ -163,12 +171,13 @@ class Session:
         episode = Episode(self.discount_factor, reward_scaling_enabled=True)
         return batch, episode, state
 
-    def report_progress(self, training_step, total_loss, policy_loss, entropy_loss, entropy, batch):
+    def report_progress(self, training_step, total_loss, policy_loss, entropy_loss, entropy, kl_divergence, batch):
         self.writer.add_scalar('Mean Reward', batch.mean_rewards(), training_step)
         self.writer.add_scalar('Total loss', total_loss.item(), training_step)
         self.writer.add_scalar("Policy loss", policy_loss.item(), training_step)
         self.writer.add_scalar("Entropy loss", entropy_loss.item(), training_step)
         self.writer.add_scalar('Entropy', entropy.item(), training_step)
+        self.writer.add_scalar('KL divergence', kl_divergence.item(), training_step)
         print(f'\r{training_step} steps, total loss: {total_loss.item():.6f}, '
               f'rewards: {batch.mean_rewards():.0f}', end='')
 
