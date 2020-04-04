@@ -82,7 +82,7 @@ class Batch:
             self.scaled_discounted_rewards.extend(episode.scaled_discounted_rewards)
             self.total_rewards.append(episode.total_rewards)
 
-    def full(self):
+    def is_full(self):
         return self.count == self.size
 
     def mean_rewards(self):
@@ -128,7 +128,7 @@ class Session:
             new_state, reward, done, _ = self.env.step(action)
             episode.add_step(state, action, reward, done)
             if done:
-                if batch.full():
+                if batch.is_full():
                     yield batch
                     batch, episode = self.reset_generator_state()
 
