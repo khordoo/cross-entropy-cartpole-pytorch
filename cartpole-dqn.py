@@ -3,6 +3,8 @@ import torch.nn as nn
 import numpy as np
 import collections
 import gym
+from datetime import datetime
+from tensorboardX import SummaryWriter
 
 ENV_NAME = 'CartPole-v1'
 NETWORK_HIDDEN_SIZE = 24
@@ -122,6 +124,7 @@ class Session:
         self.sync_steps = sync_every
         self.discount_factor = discount_factor
         self.optimizer = torch.optim.Adam(self.net.parameters(), lr=learning_rate)
+        self.writer = SummaryWriter(comment='' + datetime.now().isoformat(timespec='seconds'))
 
     def train(self, target_reward):
         step = 0
@@ -144,10 +147,27 @@ class Session:
             self.sync_target_network(step)
 
             if mean_reward > target_reward:
-                print('solved!')
+                print('Environment Solved!')
                 break
-            print(f'\r{step} : loss {loss.item()} , reward: {mean_reward}', end='')
+
             step += 1
+            self.report_progress(step, loss.item(), mean_reward)
+
+    @torch.no_grad()
+    def play_episode(self, epsilon):
+        state = self.env.reset()
+        episode = Episode(self.discount_factor)
+        while True:
+            state_t = torch.FloatTensor(np.array([state], copy=False)).to(self.device)
+            q_actions = self.net(state_t)
+            action = torch.argmax(q_actions, dim=1).item()
+            if np.random.random() < epsilon:
+                action = np.random.choice(self.env.action_space.n)
+            new_state, reward, done, _ = self.env.step(action)
+            episode.add(state, action, reward, done, new_state)
+            if done:
+                return episode
+            state = new_state
 
     def calculate_state_value_prediction(self, states, actions):
         q_val_all_actions = self.net(states)
@@ -166,21 +186,10 @@ class Session:
         if step % self.sync_steps:
             self.target_net.load_state_dict(self.net.state_dict())
 
-    @torch.no_grad()
-    def play_episode(self, epsilon):
-        state = self.env.reset()
-        episode = Episode(self.discount_factor)
-        while True:
-            state_t = torch.FloatTensor(np.array([state], copy=False)).to(self.device)
-            q_actions = self.net(state_t)
-            action = torch.argmax(q_actions, dim=1).item()
-            if np.random.random() < epsilon:
-                action = np.random.choice(self.env.action_space.n)
-            new_state, reward, done, _ = self.env.step(action)
-            episode.add(state, action, reward, done, new_state)
-            if done:
-                return episode
-            state = new_state
+    def report_progress(self, step, loss, mean_reward):
+        self.writer.add_scalar('Reward', mean_reward, step)
+        self.writer.add_scalar('loss', loss, step)
+        print(f'\r{step} : loss {loss} , reward: {mean_reward}', end='')
 
 
 env = gym.make(ENV_NAME)
